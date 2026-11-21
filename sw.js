@@ -1,7 +1,7 @@
 // Çevrim dışı çalışma: ağ varsa güncel dosya gelir ve önbelleğe yazılır; ağ yoksa önbellek kullanılır.
 // İçerik veya kod değişince CACHE sürümünü artır.
-var CACHE = "gunluk-ingilizce-v10";
-var FILES = ["./", "index.html", "style.css", "app.js", "data.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+var CACHE = "gunluk-ingilizce-v11";
+var FILES = ["./", "index.html", "style.css", "app.js", "data.js", "manifest.webmanifest", "icon.svg", "faho-180.png", "faho-192.png", "faho-512.png"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
@@ -14,7 +14,10 @@ self.addEventListener("activate", function (e) {
 self.addEventListener("fetch", function (e) {
   if (e.request.method !== "GET") return;
   // Önce ağ (güncel sürüm), ağ yoksa önbellek
-  e.respondWith(fetch(e.request).then(function (res) {
+  // Tarayıcı önbelleğini atla; aynı kökten istekler her zaman sunucudan taze gelir
+  var url = new URL(e.request.url);
+  var req = url.origin === location.origin ? fetch(e.request.url, { cache: "no-cache" }) : fetch(e.request);
+  e.respondWith(req.then(function (res) {
     if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); }
     return res;
   }).catch(function () { return caches.match(e.request, { ignoreSearch: true }); }));
