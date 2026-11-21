@@ -9,6 +9,7 @@
   var INTERVALS = [0, 1, 3, 7, 14, 30, 60]; // kutu -> gün
   var COLORS = ["#3b4bd8", "#0f9d8a", "#e8590c", "#c2255c", "#7048e8", "#1c7ed6",
     "#2b8a3e", "#d9480f", "#5f3dc4", "#0b7285", "#a61e4d", "#5c6b7a"];
+  var SECTIONS = ["Evde ve markette", "Kendini ve çevreni anlat", "Şehirde ve dışarıda", "İşte ve yolculukta"];
   var OFFSETS = [0, 48, 78, 48, 0, -48, -78, -48];
   var PASS = 80; // ünite sınavı geçme yüzdesi
   var app = document.getElementById("app");
@@ -96,12 +97,26 @@
     var w = u.items.filter(function (i) { return i.kind === "word"; });
     var s = u.items.filter(function (i) { return i.kind === "sentence"; });
     var out = [];
-    // Her ders: 5 yeni kelime + bu kelimelerle 4 cümle; her öğe derste bir kez sorulur
+    // Ders: 5 yeni kelime + 4 cümle; her öğe derste bir kez sorulur.
+    // Dersler arasına dinleme, konuşma, okuma, sandık ve pekiştirme durakları girer.
     var wc = chunk(w, 5), sc = chunk(s, 4), n = Math.max(wc.length, sc.length);
+    var R = u.readings || [];
+    function d(i) { return { id: u.id + "-d" + (i + 1), name: "Ders " + (i + 1), items: (wc[i] || []).concat(sc[i] || []), mode: "mixed", icon: "⭐" }; }
+    function grp(a, b) { return (wc[a] || []).concat(sc[a] || [], wc[b] || [], sc[b] || []); }
+    function rd(k) { if (R[k]) out.push({ id: u.id + "-r" + (k + 1), name: "Okuma: " + R[k].title, items: [], reading: R[k], mode: "reading", icon: "📖" }); }
     for (var i = 0; i < n; i++) {
-      out.push({ id: u.id + "-d" + (i + 1), name: "Ders " + (i + 1), items: (wc[i] || []).concat(sc[i] || []), mode: "mixed", icon: i % 2 ? "💬" : "📖" });
+      out.push(d(i));
+      if (i === 1) out.push({ id: u.id + "-l1", name: "Dinleme", items: grp(0, 1), mode: "listen", icon: "🎧" });
+      if (i === 2) rd(0);
+      if (i === 3) {
+        out.push({ id: u.id + "-s1", name: "Konuşma", items: grp(2, 3), mode: "speak", icon: "🎤" });
+        out.push({ id: u.id + "-c1", name: "Sandık", items: [], mode: "chest", icon: "🎁" });
+      }
+      if (i === 5) rd(1);
     }
-    out.push({ id: u.id + "-p", name: "Pekiştirme", items: u.items, mode: "practice", icon: "🔁" });
+    if (n < 6) rd(1);
+    out.push({ id: u.id + "-p", name: "Pekiştirme", items: u.items, mode: "practice", icon: "🏋️" });
+    rd(2);
     out.push({ id: u.id + "-test", name: "Ünite sınavı", items: u.items, mode: "test", icon: "🏆" });
     out.forEach(function (l) { l.unit = u; });
     u._lessons = out;
@@ -290,9 +305,17 @@
       var tt = ["build_en", "listen_type", "blank", "build_tr", "speak"];
       shuffle(s).slice(0, 9).forEach(function (it, i) { q.push(makeEx(it, tt[i % tt.length])); });
     } else if (kind === "listen") {
-      items.forEach(function (it) { q.push(makeEx(it, it.kind === "word" ? "listen_choose" : "listen_type")); });
+      shuffle(w).slice(0, 4).forEach(function (it) { q.push(makeEx(it, "listen_choose")); });
+      shuffle(s).slice(0, 6).forEach(function (it) { q.push(makeEx(it, "listen_type")); });
     } else if (kind === "speak") {
-      items.forEach(function (it) { q.push(makeEx(it, "speak")); });
+      var sp = s.length ? s : items;
+      shuffle(w).slice(0, 2).forEach(function (it) { q.push(makeEx(it, "listen_choose")); });
+      shuffle(sp).slice(0, 7).forEach(function (it) { q.push(makeEx(it, "speak")); });
+    } else if (kind === "reading") {
+      extra.questions.forEach(function (qq, k) {
+        q.push({ type: "read", reading: extra, q: qq, n: k,
+          options: shuffle(qq.options.map(function (o, j) { return { t: o, ok: j === qq.answer }; })) });
+      });
     } else {
       var mw = w.length >= 7 ? shuffle(w).slice(0, 4) : [];
       items.forEach(function (it) {
@@ -366,8 +389,11 @@
     COURSE.units.forEach(function (u, ui) {
       var ls = lessonsOf(u);
       var done = ls.filter(isDone).length;
+      var sec = Math.floor(ui / 4);
+      if (ui % 4 === 0) h += '<div class="section-head"><small>' + (sec + 1) + '. KISIM</small><b>' + esc(SECTIONS[sec] || "") + '</b></div>';
+      else h += '<div class="divider"><span>' + esc(u.title) + '</span></div>';
       h += '<section class="unit-block" style="--c:' + u.color + '">' +
-        '<div class="unit-banner"><div><small>ÜNİTE ' + (ui + 1) + ' · ' + done + '/' + ls.length + '</small>' +
+        '<div class="unit-banner"><div><small>' + (sec + 1) + '. KISIM, ' + (ui % 4 + 1) + '. ÜNİTE · ' + done + '/' + ls.length + '</small>' +
         '<h2>' + esc(u.title) + '</h2></div><button class="guide-btn" data-guide="' + ui + '" aria-label="Ünite rehberi">📘</button></div>' +
         '<div class="nodes">';
       ls.forEach(function (l, li) {
@@ -378,7 +404,7 @@
         h += '<div class="node-row' + (cls === "current" ? " cur" : "") + '" style="transform:translateX(' + off + 'px)">' +
           (cls === "current" ? '<div class="start-bubble">BAŞLA</div>' : "") +
           '<button class="node ' + cls + (l.mode === "test" ? " test" : "") + '" data-gi="' + l.gi + '" aria-label="' + esc(l.name) + '">' +
-          '<span>' + (cls === "locked" ? "🔒" : cls === "done" && l.mode !== "test" ? "✓" : l.icon) + '</span></button>' + stars + '</div>';
+          '<span>' + (cls === "locked" ? "🔒" : cls === "done" && l.mode === "mixed" ? "✓" : l.icon) + '</span></button>' + stars + '</div>';
       });
       h += '</div>';
       if (unitDone(u)) h += '<div class="unit-done">✅ ' + esc(u.title) + ' tamamlandı</div>';
@@ -401,6 +427,10 @@
     var li = lessonsOf(u).indexOf(l) + 1, total = lessonsOf(u).length;
     var desc = l.mode === "test" ? "Ünitenin tamamından " + PASS + "% başarıyla geçin." :
       l.mode === "practice" ? "Ünitede öğrendiklerinizi farklı alıştırmalarla pekiştirin; önce hata yaptıklarınız gelir." :
+      l.mode === "listen" ? "Önceki iki dersin kelime ve cümlelerini dinleyerek anlayın." :
+      l.mode === "speak" ? "Öğrendiğiniz cümleleri sesli okuyun." :
+      l.mode === "reading" ? "Kısa bir metni okuyup soruları cevaplayın." :
+      l.mode === "chest" ? "Ödül sandığı: açın ve bonus puan kazanın." :
       l.items.filter(function (i) { return i.kind === "word"; }).length + " yeni kelime, " +
       l.items.filter(function (i) { return i.kind === "sentence"; }).length + " cümle";
     var h = '<div class="sheet-head" style="--c:' + u.color + '"><span class="sheet-icon">' + (locked ? "🔒" : l.icon) + '</span><div>' +
@@ -412,7 +442,8 @@
       h += '<button class="btn ghost" data-close>Kapat</button>';
     } else {
       if (st) h += '<p class="muted">En iyi sonuç: %' + st.best + ' · ' + "★★★".slice(0, st.stars) + '</p>';
-      h += '<button class="btn" data-start>' + (st ? "TEKRAR ÇALIŞ" : "BAŞLA") + ' · +' + (l.mode === "test" ? 20 : 10) + ' puan</button>';
+      if (l.mode === "chest") h += st ? '<p class="muted">Bu sandığı açtınız.</p><button class="btn ghost" data-close>Kapat</button>' : '<button class="btn" data-start>SANDIĞI AÇ</button>';
+      else h += '<button class="btn" data-start>' + (st ? "TEKRAR ÇALIŞ" : "BAŞLA") + ' · +' + (l.mode === "test" ? 20 : 10) + ' puan</button>';
     }
     openSheet(h, function (d) {
       var s = d.querySelector("[data-start]");
@@ -585,13 +616,26 @@
   // ---------- Ders oturumu ----------
   var S = null;
   function startLesson(l, skipTest) {
-    startSession(l.mode, l.items, l, skipTest ? "Atlama sınavı" : l.name);
+    if (l.mode === "chest") return openChest(l);
+    startSession(l.mode, l.items, l, skipTest ? "Atlama sınavı" : l.name, l.reading);
   }
   function startSession(kind, items, lesson, title, extra) {
-    if (!items.length) return;
+    if (!items.length && kind !== "reading") return;
     S = { kind: kind, lesson: lesson, title: title || "", queue: buildSession(kind, items, extra), pos: 0,
       correct: 0, wrong: 0, firstOk: 0, firstAll: 0, combo: 0, maxCombo: 0, results: {}, requeued: {}, start: Date.now() };
     go("lesson");
+  }
+  function openChest(l) {
+    if (state.lessons[l.id]) return;
+    var gain = 15 + Math.floor(Math.random() * 3) * 5;
+    state.lessons[l.id] = { stars: 3, best: 100 };
+    state.xp[today()] = todayXp() + gain;
+    save();
+    openSheet('<div class="center chest-open"><div class="big pop">🎁</div><h3>Sandık açıldı!</h3><p class="muted">Çalışmanızın ödülü</p>' +
+      '<div class="chest-gain">⚡ +' + gain + ' puan</div></div><canvas id="fx"></canvas><button class="btn" data-ok>HARİKA</button>', function (d) {
+        fanfare(); confetti(d.querySelector("#fx"));
+        d.querySelector("[data-ok]").onclick = function () { closeSheet(); render.learn(); };
+      });
   }
   function startReview() {
     var due = dueItems().slice(0, 12);
@@ -742,6 +786,31 @@
       };
     });
   }
+  EX.read = function (ex, root) {
+    var r = ex.reading;
+    root.innerHTML = '<div class="prompt-label">Oku ve yanıtla</div>' +
+      '<div class="passage"><button class="icon-btn" data-isay aria-label="Dinle">🔊</button><div><b>' + esc(r.title) + '</b>' +
+      r.en.split(/\n+/).map(function (x) { return '<p>' + esc(x) + '</p>'; }).join("") +
+      '<details><summary>Türkçesi</summary><p>' + esc(r.tr) + '</p></details></div></div>' +
+      '<div class="question">' + (ex.n + 1) + '. ' + esc(ex.q.q) + '</div>' +
+      '<div class="options">' + ex.options.map(function (o, i) {
+        return '<button class="opt" data-o="' + i + '"><span class="key">' + (i + 1) + '</span>' + esc(o.t) + '</button>';
+      }).join("") + '</div>';
+    bindInline(root, r.en);
+    var sel = -1, right = ex.options.filter(function (o) { return o.ok; })[0].t;
+    var enable = setCheck(function () {
+      var btns = root.querySelectorAll(".opt"), ok = ex.options[sel].ok;
+      btns[sel].classList.add(ok ? "right" : "wrong");
+      if (!ok) ex.options.forEach(function (o, i) { if (o.ok) btns[i].classList.add("right"); });
+      return { ok: ok, ans: right };
+    });
+    root.querySelectorAll(".opt").forEach(function (b) {
+      b.onclick = function () {
+        root.querySelectorAll(".opt").forEach(function (x) { x.classList.remove("sel"); });
+        b.classList.add("sel"); sel = +b.dataset.o; enable(true);
+      };
+    });
+  };
   EX.choose_tr = function (ex, root) {
     chooseEx(ex, root, "Bu kelimenin anlamı ne?", '<div class="prompt">' + inlineSay() + '<span>' + esc(ex.item.en) + '</span></div>', ex.item.tr, ex.item.en);
   };

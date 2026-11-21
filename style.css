@@ -349,3 +349,17 @@ textarea.type:focus { outline: none; border-color: var(--brand); }
 .seg button { border: 2px solid var(--line); background: var(--card); border-radius: 10px; padding: 6px 10px; font-weight: 800; }
 .seg button.on { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
 .stack { display: grid; gap: 10px; }
+
+/* Kısım başlığı, ayraç, okuma, sandık */
+.section-head { text-align: center; margin: 8px 0 14px; display: grid; gap: 2px; }
+.section-head small { color: var(--muted); font-weight: 900; letter-spacing: .1em; font-size: 12px; }
+.section-head b { font-size: 20px; font-weight: 900; }
+.divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 800; font-size: 15px; margin: 6px 0 14px; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 2px; background: var(--line); }
+.passage { display: flex; gap: 6px; border: 2px solid var(--line); border-radius: 16px; padding: 10px 12px; margin-bottom: 14px; font-size: 17px; }
+.passage p { margin: 6px 0; }
+.passage details { margin-top: 6px; color: var(--muted); font-size: 14px; }
+.passage summary { cursor: pointer; font-weight: 800; }
+.question { font-weight: 800; font-size: 18px; margin-bottom: 12px; }
+.chest-open .big { font-size: 80px; }
+.chest-gain { font-size: 24px; font-weight: 900; color: var(--gold); margin: 6px 0 4px; }
