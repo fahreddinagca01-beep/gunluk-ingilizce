@@ -16,7 +16,7 @@
   // ---------- Kayıt ----------
   function defaults() {
     return {
-      v: 1, items: {}, lessons: {}, xp: {},
+      v: 1, course: COURSE.version || 1, items: {}, lessons: {}, xp: {},
       streak: { count: 0, last: "", best: 0 },
       stats: { lessons: 0, perfect: 0, correct: 0, wrong: 0, seconds: 0 },
       settings: { goal: 30, rate: 0.9, sound: true, speak: true },
@@ -27,6 +27,8 @@
     var d = defaults(), s;
     try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) { s = null; }
     if (!s) return d;
+    // İçerik değişince ders ve öğe ilerlemesi sıfırlanır; puan, seri ve istatistik kalır.
+    if ((s.course || 1) !== (COURSE.version || 1)) { s.lessons = {}; s.items = {}; s.course = COURSE.version || 1; }
     for (var k in d) if (!(k in s)) s[k] = d[k];
     ["settings", "stats", "streak"].forEach(function (g) { for (var k2 in d[g]) if (!(k2 in s[g])) s[g][k2] = d[g][k2]; });
     migrate(s);
@@ -345,7 +347,7 @@
       var ls = lessonsOf(u);
       var done = ls.filter(isDone).length;
       h += '<section class="unit-block" style="--c:' + u.color + '">' +
-        '<div class="unit-banner"><div><small>BÖLÜM ' + (ui + 1) + ' · ' + done + '/' + ls.length + '</small>' +
+        '<div class="unit-banner"><div><small>ÜNİTE ' + (ui + 1) + ' · ' + done + '/' + ls.length + '</small>' +
         '<h2>' + esc(u.title) + '</h2></div><button class="guide-btn" data-guide="' + ui + '" aria-label="Ünite rehberi">📘</button></div>' +
         '<div class="nodes">';
       ls.forEach(function (l, li) {
