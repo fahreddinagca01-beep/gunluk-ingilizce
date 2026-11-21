@@ -21,7 +21,7 @@
       streak: { count: 0, last: "", best: 0 },
       stats: { lessons: 0, perfect: 0, correct: 0, wrong: 0, seconds: 0 },
       settings: { goal: 30, rate: 0.9, sound: true, speak: true },
-      speakOffUntil: 0
+      speakOffUntil: 0, shown: {}
     };
   }
   function load() {
@@ -619,9 +619,49 @@
     if (l.mode === "chest") return openChest(l);
     startSession(l.mode, l.items, l, skipTest ? "Atlama sınavı" : l.name, l.reading);
   }
+  // Bir kelime ilk kez sorulmadan ya da cümlede geçmeden önce öğretme kartı gösterilir.
+  function wordKey(en) { return normEn(en).replace(/^(to|a|an|the) /, ""); }
+  var WORD_KEYS = [], seenKey = {};
+  WORDS.forEach(function (w) {
+    var k = wordKey(w.en);
+    if (k.length >= 3 && !seenKey[k]) { seenKey[k] = 1; WORD_KEYS.push({ k: k, multi: k.indexOf(" ") > 0, item: w }); }
+  });
+  // Kelimenin çekimli biçimleri: curtain -> curtains, chop -> chopped, carry -> carries
+  function forms(k) {
+    var parts = k.split(" "), w = parts.pop(), pre = parts.length ? parts.join(" ") + " " : "", f = [w];
+    ["s", "es", "ed", "d", "ing", "er", "est"].forEach(function (x) { f.push(w + x); });
+    if (/e$/.test(w)) f.push(w.slice(0, -1) + "ing");
+    if (/[^aeiou]y$/.test(w)) f.push(w.slice(0, -1) + "ies", w.slice(0, -1) + "ied");
+    if (/[^aeiou][aeiou][^aeiouwy]$/.test(w)) f.push(w + w.slice(-1) + "ed", w + w.slice(-1) + "ing");
+    return f.map(function (x) { return " " + pre + x + " "; });
+  }
+  WORD_KEYS.forEach(function (x) { x.f = forms(x.k); });
+  function wordsIn(it) {
+    var sent = " " + normEn(it.en) + " ", out = [];
+    WORD_KEYS.forEach(function (x) {
+      var hit = x.f.some(function (v) { return sent.indexOf(v) >= 0; });
+      if (hit) {
+        var same = WORDS.filter(function (w) { return wordKey(w.en) === x.k && w.unit === it.unit; })[0];
+        out.push(same || x.item);
+      }
+    });
+    return out;
+  }
+  function known(w) { return !!(state.items[w.id] || state.shown[w.id]); }
+  function addIntros(q) {
+    var out = [], done = {};
+    q.forEach(function (ex) {
+      var ws = ex.type === "match" ? ex.items : !ex.item ? [] : ex.item.kind === "word" ? [ex.item] : wordsIn(ex.item);
+      ws.forEach(function (w) {
+        if (!known(w) && !done[w.id]) { done[w.id] = 1; out.push({ type: "intro", item: w }); }
+      });
+      out.push(ex);
+    });
+    return out;
+  }
   function startSession(kind, items, lesson, title, extra) {
     if (!items.length && kind !== "reading") return;
-    S = { kind: kind, lesson: lesson, title: title || "", queue: buildSession(kind, items, extra), pos: 0,
+    S = { kind: kind, lesson: lesson, title: title || "", queue: addIntros(buildSession(kind, items, extra)), pos: 0,
       correct: 0, wrong: 0, firstOk: 0, firstAll: 0, combo: 0, maxCombo: 0, results: {}, requeued: {}, start: Date.now() };
     go("lesson");
   }
@@ -763,7 +803,7 @@
   }
   function inlineSay() { return '<button class="icon-btn say" data-isay aria-label="Dinle">🔊</button>'; }
   function bindInline(root, text) { var b = root.querySelector("[data-isay]"); if (b) b.onclick = function () { say(text); }; }
-  function newTag(it) { return it && !state.items[it.id] ? '<span class="new-tag">YENİ</span>' : ""; }
+  function newTag(it) { return it && !state.items[it.id] && !state.shown[it.id] ? '<span class="new-tag">YENİ</span>' : ""; }
 
   var EX = {};
   function chooseEx(ex, root, label, promptHtml, answer, audio) {
@@ -810,6 +850,22 @@
         b.classList.add("sel"); sel = +b.dataset.o; enable(true);
       };
     });
+  };
+  EX.intro = function (ex, root) {
+    var it = ex.item;
+    var sample = SENTS.filter(function (x) { return x.unit === it.unit && wordsIn(x).indexOf(it) >= 0; })[0];
+    root.innerHTML = '<span class="new-tag">YENİ KELİME</span><div class="prompt-label">Bu kelimeyi öğrenin</div>' +
+      '<div class="intro-card"><button class="round" data-isay aria-label="Dinle">🔊</button>' +
+      '<div class="intro-en">' + esc(it.en) + '</div><div class="intro-tr">' + esc(it.tr) + '</div>' +
+      (it.note ? '<div class="intro-note">💡 ' + esc(it.note) + '</div>' : "") +
+      (sample ? '<div class="intro-ex"><b>Örnek:</b> ' + esc(sample.en) + '<br><span>' + esc(sample.tr) + '</span></div>' : "") + '</div>';
+    bindInline(root, it.en);
+    setTimeout(function () { say(it.en); }, 250);
+    state.shown[it.id] = 1; save();
+    var f = foot();
+    f.className = "foot";
+    f.innerHTML = '<button class="btn" id="next">ÖĞRENDİM</button>';
+    f.querySelector("#next").onclick = function () { S.pos++; render.lesson(); };
   };
   EX.choose_tr = function (ex, root) {
     chooseEx(ex, root, "Bu kelimenin anlamı ne?", '<div class="prompt">' + inlineSay() + '<span>' + esc(ex.item.en) + '</span></div>', ex.item.tr, ex.item.en);
