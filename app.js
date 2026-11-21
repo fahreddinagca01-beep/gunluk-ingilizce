@@ -359,12 +359,13 @@
   }
   function statsBar() {
     var goal = state.settings.goal, xp = todayXp();
-    return '<header class="statsbar">' +
+    return '<header class="statsbar"><div class="brand"><span class="brand-logo">EN</span>' +
+      '<span class="brand-text"><b>FAHO</b><small>İNGİLİZCE</small></span></div><div class="chips">' +
       '<span class="chip ' + (streakNow() && state.streak.last === today() ? "fire" : "") + '">🔥 ' + streakNow() + '</span>' +
       '<span class="chip">⚡ ' + totalXp() + '</span>' +
       '<span class="chip">⭐ Sv ' + levelOf(totalXp()) + '</span>' +
       '<span class="chip goalchip">' + ring(Math.round(xp / goal * 100), "") + ' ' + xp + '/' + goal + '</span>' +
-      '</header>';
+      '</div></header>';
   }
 
   // ---------- Alt sayfa (sheet) ----------
