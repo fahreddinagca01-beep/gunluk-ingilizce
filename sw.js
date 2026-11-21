@@ -1,6 +1,6 @@
 // Çevrim dışı çalışma: ağ varsa güncel dosya gelir ve önbelleğe yazılır; ağ yoksa önbellek kullanılır.
 // İçerik veya kod değişince CACHE sürümünü artır.
-var CACHE = "gunluk-ingilizce-v9";
+var CACHE = "gunluk-ingilizce-v10";
 var FILES = ["./", "index.html", "style.css", "app.js", "data.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", function (e) {
