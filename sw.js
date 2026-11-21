@@ -1,6 +1,6 @@
-// Çevrim dışı çalışma: dosyalar önbellekten gelir, ağ varsa arka planda yenilenir.
+// Çevrim dışı çalışma: ağ varsa güncel dosya gelir ve önbelleğe yazılır; ağ yoksa önbellek kullanılır.
 // İçerik veya kod değişince CACHE sürümünü artır.
-var CACHE = "gunluk-ingilizce-v1";
+var CACHE = "gunluk-ingilizce-v2";
 var FILES = ["./", "index.html", "style.css", "app.js", "data.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", function (e) {
@@ -13,13 +13,9 @@ self.addEventListener("activate", function (e) {
 });
 self.addEventListener("fetch", function (e) {
   if (e.request.method !== "GET") return;
-  e.respondWith(caches.open(CACHE).then(function (c) {
-    return c.match(e.request, { ignoreSearch: true }).then(function (hit) {
-      var net = fetch(e.request).then(function (res) {
-        if (res && res.ok) c.put(e.request, res.clone());
-        return res;
-      }).catch(function () { return hit; });
-      return hit || net;
-    });
-  }));
+  // Önce ağ (güncel sürüm), ağ yoksa önbellek
+  e.respondWith(fetch(e.request).then(function (res) {
+    if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); }
+    return res;
+  }).catch(function () { return caches.match(e.request, { ignoreSearch: true }); }));
 });
