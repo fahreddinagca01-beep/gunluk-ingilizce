@@ -101,6 +101,7 @@
     for (var i = 0; i < n; i++) {
       out.push({ id: u.id + "-d" + (i + 1), name: "Ders " + (i + 1), items: (wc[i] || []).concat(sc[i] || []), mode: "mixed", icon: i % 2 ? "💬" : "📖" });
     }
+    out.push({ id: u.id + "-p", name: "Pekiştirme", items: u.items, mode: "practice", icon: "🔁" });
     out.push({ id: u.id + "-test", name: "Ünite sınavı", items: u.items, mode: "test", icon: "🏆" });
     out.forEach(function (l) { l.unit = u; });
     u._lessons = out;
@@ -272,6 +273,16 @@
       var t1 = ["choose_tr", "listen_choose", "choose_en"], t2 = ["build_en", "blank", "build_tr", canSpeak() ? "speak" : "listen_type"];
       shuffle(w).forEach(function (it, i) { q.push(makeEx(it, t1[i % 3])); });
       shuffle(s).forEach(function (it, i) { q.push(makeEx(it, t2[i % 4])); });
+    } else if (kind === "practice") {
+      // Önce hatalı ve zayıf öğeler, sonra az görülenler; derslerden farklı alıştırma türleri
+      var score = function (i) { var st = state.items[i.id]; return st ? st.box * 2 - st.bad * 3 : -1; };
+      var pw = shuffle(w).sort(function (a, b) { return score(a) - score(b); });
+      var ps = shuffle(s).sort(function (a, b) { return score(a) - score(b); });
+      var t3 = ["listen_choose", "choose_en", "choose_tr"], t4 = ["listen_type", "build_tr", canSpeak() ? "speak" : "build_en", "blank"];
+      pw.slice(0, 3).forEach(function (it, i) { q.push(makeEx(it, t3[i % 3])); });
+      if (pw.length >= 7) q.push({ type: "match", items: pw.slice(3, 7) });
+      ps.slice(0, 6).forEach(function (it, i) { q.push(makeEx(it, t4[i % 4])); });
+      q = [q[0]].concat(shuffle(q.slice(1)));
     } else if (kind === "test") {
       var ws = shuffle(w);
       ws.slice(0, 4).forEach(function (it) { q.push(makeEx(it)); });
@@ -389,6 +400,7 @@
     var locked = !st && l.gi > cur;
     var li = lessonsOf(u).indexOf(l) + 1, total = lessonsOf(u).length;
     var desc = l.mode === "test" ? "Ünitenin tamamından " + PASS + "% başarıyla geçin." :
+      l.mode === "practice" ? "Ünitede öğrendiklerinizi farklı alıştırmalarla pekiştirin; önce hata yaptıklarınız gelir." :
       l.items.filter(function (i) { return i.kind === "word"; }).length + " yeni kelime, " +
       l.items.filter(function (i) { return i.kind === "sentence"; }).length + " cümle";
     var h = '<div class="sheet-head" style="--c:' + u.color + '"><span class="sheet-icon">' + (locked ? "🔒" : l.icon) + '</span><div>' +
@@ -433,7 +445,7 @@
     }
     var h = statsBar() + '<h1 class="page-title">Tekrar</h1><div class="plist">' +
       card("smart", "🧠", "Akıllı tekrar", due ? due + " öğe tekrar zamanı geldi" : "Şu an bekleyen yok; karışık alıştırma", false) +
-      card("weak", "🎯", "Zayıf noktalar", weak ? weak + " öğede zorlanıyorsunuz" : "Henüz zayıf öğe yok", !weak) +
+      card("weak", "🎯", "Hatalarım", weak ? weak + " öğede hata yaptınız; bunları çalışın" : "Henüz hata yok", !weak) +
       card("listen", "🎧", "Dinleme", "Duyduğunuzu anlayın ve yazın", !seen) +
       card("speak", "🎤", "Konuşma", Rec ? "Cümleleri sesli okuyun" : "Bu tarayıcıda konuşma tanıma yok", !seen || !Rec) +
       card("words", "📚", "Kelime listesi", learnedCount() + " öğe öğrenildi · " + seen + " öğe görüldü", !seen) +
@@ -444,7 +456,7 @@
       b.onclick = function () {
         var p = b.dataset.p;
         if (p === "smart") startReview();
-        else if (p === "weak") startSession("review", shuffle(weakItems().slice(0, 10)), null, "Zayıf noktalar");
+        else if (p === "weak") startSession("review", shuffle(weakItems().slice(0, 10)), null, "Hatalarım");
         else if (p === "listen") startSession("listen", shuffle(seenItems()).slice(0, 10), null, "Dinleme");
         else if (p === "speak") startSession("speak", shuffle(seenItems().filter(function (i) { return i.kind === "sentence"; })).slice(0, 8), null, "Konuşma");
         else go("words");
@@ -652,6 +664,11 @@
         });
     };
     EX[ex.type](ex, app.querySelector("#ex"));
+    if (ex.retry) {
+      var t = app.querySelector("#ex .new-tag");
+      if (t) t.remove();
+      app.querySelector("#ex").insertAdjacentHTML("afterbegin", '<span class="new-tag retry-tag">↺ ÖNCEKİ HATA</span>');
+    }
   };
 
   function foot() { return app.querySelector("#foot"); }
@@ -673,6 +690,12 @@
     if (r.ok) { S.correct++; S.combo++; S.maxCombo = Math.max(S.maxCombo, S.combo); }
     else {
       S.wrong++; S.combo = 0;
+      // Yanlış cevaplanan soru 3 soru sonra (az soru kaldıysa sonda) yeniden gelir; en çok 2 kez
+      var tries = (ex.tries || 0) + 1;
+      if (it && tries <= 2) {
+        var again = makeEx(it, ex.type); again.retry = true; again.tries = tries;
+        S.queue.splice(Math.min(S.pos + 4, S.queue.length), 0, again);
+      }
     }
     var note = it && it.note ? '<div class="note">💡 ' + esc(it.note) + '</div>' : "";
     var head = r.ok ? (r.typo ? "Doğru, küçük bir yazım hatası var" : (S.combo >= 3 ? S.combo + " doğru üst üste! 🔥" : pick(PRAISE))) : "Doğru cevap:";

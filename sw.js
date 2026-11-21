@@ -1,6 +1,6 @@
 // Çevrim dışı çalışma: ağ varsa güncel dosya gelir ve önbelleğe yazılır; ağ yoksa önbellek kullanılır.
 // İçerik veya kod değişince CACHE sürümünü artır.
-var CACHE = "gunluk-ingilizce-v4";
+var CACHE = "gunluk-ingilizce-v5";
 var FILES = ["./", "index.html", "style.css", "app.js", "data.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", function (e) {
