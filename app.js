@@ -45,6 +45,14 @@
       } else if (s.lessons[id] === true) s.lessons[id] = { stars: 2, best: 80 };
     });
     if (s.streak.best < s.streak.count) s.streak.best = s.streak.count;
+    // Ünite başına ayrı kelime (k) ve cümle (c) dersleri birleşik derslere (d) taşınır.
+    Object.keys(s.lessons).forEach(function (id) {
+      var m = /^(u\d+)-[kc](\d)$/.exec(id);
+      if (!m) return;
+      var nid = m[1] + "-d" + m[2], o = s.lessons[nid], v = s.lessons[id];
+      s.lessons[nid] = o ? { stars: Math.min(o.stars, v.stars), best: Math.min(o.best, v.best) } : v;
+      delete s.lessons[id];
+    });
     if (!s.stats.lessons) s.stats.lessons = Object.keys(s.lessons).length;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
@@ -88,8 +96,11 @@
     var w = u.items.filter(function (i) { return i.kind === "word"; });
     var s = u.items.filter(function (i) { return i.kind === "sentence"; });
     var out = [];
-    chunk(w, 5).forEach(function (c, i) { out.push({ id: u.id + "-k" + (i + 1), name: "Kelimeler " + (i + 1), items: c, mode: "words", icon: "📖" }); });
-    chunk(s, 4).forEach(function (c, i) { out.push({ id: u.id + "-c" + (i + 1), name: "Cümleler " + (i + 1), items: c, mode: "sentences", icon: "💬" }); });
+    // Her ders: 5 yeni kelime + bu kelimelerle 4 cümle; her öğe derste bir kez sorulur
+    var wc = chunk(w, 5), sc = chunk(s, 4), n = Math.max(wc.length, sc.length);
+    for (var i = 0; i < n; i++) {
+      out.push({ id: u.id + "-d" + (i + 1), name: "Ders " + (i + 1), items: (wc[i] || []).concat(sc[i] || []), mode: "mixed", icon: i % 2 ? "💬" : "📖" });
+    }
     out.push({ id: u.id + "-test", name: "Ünite sınavı", items: u.items, mode: "test", icon: "🏆" });
     out.forEach(function (l) { l.unit = u; });
     u._lessons = out;
@@ -256,19 +267,15 @@
     var q = [];
     var w = items.filter(function (i) { return i.kind === "word"; });
     var s = items.filter(function (i) { return i.kind === "sentence"; });
-    if (kind === "words") {
-      var t1 = ["choose_tr", "listen_choose", "choose_en"];
+    // Bir oturumda her öğe yalnız bir kez sorulur; pekiştirme tekrar ve sınavda yapılır.
+    if (kind === "mixed") {
+      var t1 = ["choose_tr", "listen_choose", "choose_en"], t2 = ["build_en", "blank", "build_tr", canSpeak() ? "speak" : "listen_type"];
       shuffle(w).forEach(function (it, i) { q.push(makeEx(it, t1[i % 3])); });
-      q.push({ type: "match", items: shuffle(w).slice(0, 5) });
-      shuffle(w).forEach(function (it, i) { q.push(makeEx(it, t1[(i + 1) % 3])); });
-    } else if (kind === "sentences") {
-      var first = ["build_en", "blank", "build_tr", "blank"], second = ["listen_type", "speak", "build_en", "listen_type"];
-      shuffle(s).forEach(function (it, i) { q.push(makeEx(it, first[i % 4])); });
-      if (extra && extra.length) shuffle(extra).slice(0, 2).forEach(function (it) { q.push(makeEx(it)); });
-      shuffle(s).forEach(function (it, i) { q.push(makeEx(it, second[i % 4])); });
+      shuffle(s).forEach(function (it, i) { q.push(makeEx(it, t2[i % 4])); });
     } else if (kind === "test") {
-      shuffle(w).slice(0, 4).forEach(function (it) { q.push(makeEx(it)); });
-      q.push({ type: "match", items: shuffle(w).slice(0, 5) });
+      var ws = shuffle(w);
+      ws.slice(0, 4).forEach(function (it) { q.push(makeEx(it)); });
+      if (ws.length >= 8) q.push({ type: "match", items: ws.slice(4, 9) });
       var tt = ["build_en", "listen_type", "blank", "build_tr", "speak"];
       shuffle(s).slice(0, 9).forEach(function (it, i) { q.push(makeEx(it, tt[i % tt.length])); });
     } else if (kind === "listen") {
@@ -276,10 +283,12 @@
     } else if (kind === "speak") {
       items.forEach(function (it) { q.push(makeEx(it, "speak")); });
     } else {
+      var mw = w.length >= 7 ? shuffle(w).slice(0, 4) : [];
       items.forEach(function (it) {
+        if (mw.indexOf(it) >= 0) return;
         q.push(makeEx(it, it.kind === "sentence" ? pick(["build_en", "listen_type", "speak", "blank"]) : null));
       });
-      if (w.length >= 4) q.splice(2, 0, { type: "match", items: shuffle(w).slice(0, 5) });
+      if (mw.length) q.splice(2, 0, { type: "match", items: mw });
     }
     return q;
   }
@@ -380,7 +389,8 @@
     var locked = !st && l.gi > cur;
     var li = lessonsOf(u).indexOf(l) + 1, total = lessonsOf(u).length;
     var desc = l.mode === "test" ? "Ünitenin tamamından " + PASS + "% başarıyla geçin." :
-      l.items.length + (l.mode === "words" ? " yeni kelime" : " yeni cümle");
+      l.items.filter(function (i) { return i.kind === "word"; }).length + " yeni kelime, " +
+      l.items.filter(function (i) { return i.kind === "sentence"; }).length + " cümle";
     var h = '<div class="sheet-head" style="--c:' + u.color + '"><span class="sheet-icon">' + (locked ? "🔒" : l.icon) + '</span><div>' +
       '<small>' + esc(u.title) + ' · Ders ' + li + '/' + total + '</small><h3>' + esc(l.name) + '</h3><p>' + desc + '</p></div></div>';
     if (locked) {
@@ -563,8 +573,7 @@
   // ---------- Ders oturumu ----------
   var S = null;
   function startLesson(l, skipTest) {
-    var extra = l.mode === "sentences" ? l.unit.items.filter(function (i) { return i.kind === "word"; }) : null;
-    startSession(l.mode, l.items, l, skipTest ? "Atlama sınavı" : l.name, extra);
+    startSession(l.mode, l.items, l, skipTest ? "Atlama sınavı" : l.name);
   }
   function startSession(kind, items, lesson, title, extra) {
     if (!items.length) return;
@@ -664,7 +673,6 @@
     if (r.ok) { S.correct++; S.combo++; S.maxCombo = Math.max(S.maxCombo, S.combo); }
     else {
       S.wrong++; S.combo = 0;
-      if (it && !S.requeued[it.id]) { S.requeued[it.id] = 1; var nx = makeEx(it); nx.retry = true; S.queue.push(nx); }
     }
     var note = it && it.note ? '<div class="note">💡 ' + esc(it.note) + '</div>' : "";
     var head = r.ok ? (r.typo ? "Doğru, küçük bir yazım hatası var" : (S.combo >= 3 ? S.combo + " doğru üst üste! 🔥" : pick(PRAISE))) : "Doğru cevap:";
