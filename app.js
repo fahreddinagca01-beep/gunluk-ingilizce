@@ -125,7 +125,9 @@
   var PATH = [];
   COURSE.units.forEach(function (u) { lessonsOf(u).forEach(function (l) { l.gi = PATH.length; PATH.push(l); }); });
   function isDone(l) { return !!state.lessons[l.id]; }
-  function currentIndex() { for (var i = 0; i < PATH.length; i++) if (!isDone(PATH[i])) return i; return PATH.length; }
+  // Seviye seçimi: başlangıç ünitesinden önceki dersler açık kalır ama sırayı belirlemez
+  function startGi() { var u = COURSE.units[state.startUnit || 0]; return u ? lessonsOf(u)[0].gi : 0; }
+  function currentIndex() { for (var i = startGi(); i < PATH.length; i++) if (!isDone(PATH[i])) return i; return PATH.length; }
   function unitDone(u) { return lessonsOf(u).every(isDone); }
 
   function totalXp() { var t = 0; for (var d in state.xp) t += state.xp[d]; return t; }
@@ -399,7 +401,7 @@
         '<div class="nodes">';
       ls.forEach(function (l, li) {
         var st = state.lessons[l.id];
-        var cls = st ? "done" : l.gi === cur ? "current" : l.gi < cur ? "done" : "locked";
+        var cls = st ? "done" : l.gi === cur ? "current" : l.gi < startGi() ? "open" : l.gi < cur ? "done" : "locked";
         var off = OFFSETS[li % OFFSETS.length];
         var stars = st ? '<span class="stars">' + "★★★".slice(0, st.stars) + '<i>' + "★★★".slice(st.stars) + '</i></span>' : "";
         h += '<div class="node-row' + (cls === "current" ? " cur" : "") + '" style="transform:translateX(' + off + 'px)">' +
@@ -574,7 +576,9 @@
       '<div class="setting"><span>Konuşma alıştırması</span>' + seg("speak", [true, false], ["Açık", "Kapalı"]) + '</div>' +
       '</div>' +
       (Rec ? "" : '<p class="muted">Bu tarayıcı konuşma tanımayı desteklemiyor; konuşma alıştırması yerine dinleme gelir.</p>') +
-      '<div class="stack"><h3 class="section-title">Yedek</h3>' +
+      '<div class="stack"><h3 class="section-title">Seviye</h3>' +
+      '<button class="btn ghost" data-act="level">Başlangıç seviyemi değiştir</button>' +
+      '<h3 class="section-title">Yedek</h3>' +
       '<p class="muted">İlerlemeniz yalnız bu telefonda tutulur. Ara sıra yedeği kopyalayıp bir notta saklayın.</p>' +
       '<button class="btn ghost" data-act="copy">Yedeği kopyala</button>' +
       '<textarea class="type" id="restore" placeholder="Yedeği buraya yapıştırın"></textarea>' +
@@ -593,6 +597,7 @@
         if (b.dataset.set === "rate") say("This is how fast I will speak.");
       };
     });
+    app.querySelector('[data-act="level"]').onclick = function () { render.welcome(); };
     app.querySelector('[data-act="copy"]').onclick = function () {
       var data = JSON.stringify(state), ta = app.querySelector("#restore");
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1055,6 +1060,34 @@
     })();
   }
 
-  showTab("learn");
+  // Yeni kullanıcıya seviyesi sorulur
+  var LEVELS = [
+    { unit: 0, icon: "🌱", name: "Yeni başlıyorum", desc: "Temel kelimelerle 1. Kısımdan başla" },
+    { unit: 4, icon: "🌿", name: "Biraz biliyorum", desc: "Basit cümleler kurabiliyorum; 2. Kısımdan başla" },
+    { unit: 8, icon: "🌳", name: "Orta seviyedeyim", desc: "Günlük konuşmaları anlıyorum; 3. Kısımdan başla" },
+    { unit: 12, icon: "🏔️", name: "İyi biliyorum", desc: "Çoğu konuyu konuşabiliyorum; 4. Kısımdan başla" }
+  ];
+  render.welcome = function () {
+    var sel = -1;
+    app.innerHTML = '<div class="welcome"><div class="brand big"><span class="brand-logo">EN</span>' +
+      '<span class="brand-text"><b>FAHO</b><small>İNGİLİZCE</small></span></div>' +
+      '<h1 class="page-title center">İngilizcen ne düzeyde?</h1><p class="muted center">Sana uygun yerden başlayalım. Önceki dersler de açık kalır.</p>' +
+      '<div class="plist">' + LEVELS.map(function (l, i) {
+        return '<button class="pcard" data-lv="' + i + '"><span class="pcard-icon">' + l.icon + '</span><span><b>' + l.name + '</b><small>' + l.desc + '</small></span></button>';
+      }).join("") + '</div></div><div class="foot"><button class="btn" id="go" disabled>DEVAM</button></div>';
+    app.querySelectorAll("[data-lv]").forEach(function (b) {
+      b.onclick = function () {
+        app.querySelectorAll("[data-lv]").forEach(function (x) { x.classList.remove("sel"); });
+        b.classList.add("sel"); sel = +b.dataset.lv; app.querySelector("#go").disabled = false;
+      };
+    });
+    app.querySelector("#go").onclick = function () {
+      state.startUnit = LEVELS[sel].unit; save();
+      showTab("learn");
+    };
+  };
+  var fresh = state.startUnit === undefined && !Object.keys(state.lessons).length && !totalXp();
+  if (state.startUnit === undefined && !fresh) { state.startUnit = 0; save(); }
+  if (fresh) render.welcome(); else showTab("learn");
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(function () {});
 })();

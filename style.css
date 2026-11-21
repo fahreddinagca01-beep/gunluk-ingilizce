@@ -384,3 +384,9 @@ textarea.type:focus { outline: none; border-color: var(--brand); }
 .brand-text { display: grid; line-height: 1; }
 .brand-text b { font-size: 24px; font-weight: 900; color: var(--brand); letter-spacing: .03em; }
 .brand-text small { font-size: 11px; font-weight: 900; color: var(--ok); letter-spacing: .18em; margin-top: 2px; }
+
+/* Seviye seçimi */
+.welcome { display: grid; gap: 10px; padding-bottom: 120px; }
+.brand.big { margin: 20px 0 4px; transform: scale(1.4); }
+.pcard.sel { border-color: var(--brand); background: var(--brand-soft); }
+.node.open { opacity: .85; }
